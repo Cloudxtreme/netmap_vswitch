@@ -2688,33 +2688,6 @@ netmap_attach(struct netmap_adapter *arg)
 }
 
 
-#ifdef WITH_PTNETMAP_GUEST
-int
-netmap_pt_guest_attach(struct netmap_adapter *arg,
-		struct netmap_pt_guest_ops *pv_ops)
-{
-	struct netmap_pt_guest_adapter *ptna;
-	struct ifnet *ifp = arg ? arg->ifp : NULL;
-	int error;
-
-	/* get allocator */
-	arg->nm_mem = netmap_mem_pt_guest_new(ifp, pv_ops);
-	if (arg->nm_mem == NULL)
-		return ENOMEM;
-	arg->na_flags |= NAF_MEM_OWNER;
-	error = _netmap_attach(arg, sizeof(struct netmap_pt_guest_adapter));
-	if (error)
-		return error;
-
-	/* get the netmap_pt_guest_adapter */
-	ptna = (struct netmap_pt_guest_adapter *) NA(ifp);
-	ptna->pv_ops = pv_ops;
-
-	return 0;
-}
-#endif /* WITH_PTNETMAP_GUEST */
-
-
 void
 NM_DBG(netmap_adapter_get)(struct netmap_adapter *na)
 {

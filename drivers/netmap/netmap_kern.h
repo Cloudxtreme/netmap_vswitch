@@ -33,21 +33,12 @@
 #define _NET_NETMAP_KERN_H_
 
 #if defined(linux)
-
 #if  defined(CONFIG_NETMAP_VALE)
 #define WITH_VALE
 #endif
-#if defined(CONFIG_NETMAP_PTNETMAP_GUEST)
-#define WITH_PTNETMAP_GUEST
-#endif
-#if defined(CONFIG_NETMAP_PTNETMAP_HOST)
-#define WITH_PTNETMAP_HOST
-#endif
-
 #endif
 
 #if defined (linux)
-
 #define	NM_LOCK_T	safe_spinlock_t	// see bsd_glue.h
 #define	NM_SELINFO_T	wait_queue_head_t
 #define	MBUF_LEN(m)	((m)->len)
@@ -1556,51 +1547,9 @@ void nm_os_kthread_send_irq(struct nm_kthread *);
 void nm_os_kthread_set_affinity(struct nm_kthread *, int);
 u_int nm_os_ncpus(void);
 
-#ifdef WITH_PTNETMAP_HOST
-/*
- * netmap adapter for host ptnetmap ports
- */
-struct netmap_pt_host_adapter {
-	struct netmap_adapter up;
-
-	struct netmap_adapter *parent;
-	int (*parent_nm_notify)(struct netmap_kring *kring, int flags);
-
-	void *ptn_state;
-};
-/* ptnetmap HOST routines */
-int netmap_get_pt_host_na(struct nmreq *nmr, struct netmap_adapter **na, int create);
-int ptnetmap_ctl(struct nmreq *nmr, struct netmap_adapter *na);
-static inline int
-nm_ptnetmap_host_on(struct netmap_adapter *na)
-{
-	return na && na->na_flags & NAF_PTNETMAP_HOST;
-}
-#else /* !WITH_PTNETMAP_HOST */
 #define netmap_get_pt_host_na(nmr, _2, _3) \
 	((nmr)->nr_flags & (NR_PTNETMAP_HOST) ? EOPNOTSUPP : 0)
 #define ptnetmap_ctl(_1, _2)   EINVAL
 #define nm_ptnetmap_host_on(_1)   EINVAL
-#endif /* WITH_PTNETMAP_HOST */
-
-#ifdef WITH_PTNETMAP_GUEST
-/* ptnetmap GUEST routines */
-struct netmap_pt_guest_ops {
-	uint32_t (*nm_ptctl)(struct ifnet *, uint32_t);
-};
-/*
- * netmap adapter for guest ptnetmap ports
- */
-struct netmap_pt_guest_adapter {
-	struct netmap_hw_adapter hwup;
-
-	struct netmap_pt_guest_ops *pv_ops;
-	struct paravirt_csb *csb;
-};
-
-int netmap_pt_guest_attach(struct netmap_adapter *, struct netmap_pt_guest_ops *);
-int netmap_pt_guest_txsync(struct netmap_kring *kring, int flags, int *notify);
-int netmap_pt_guest_rxsync(struct netmap_kring *kring, int flags, int *notify);
-#endif /* WITH_PTNETMAP_GUEST */
 
 #endif /* _NET_NETMAP_KERN_H_ */

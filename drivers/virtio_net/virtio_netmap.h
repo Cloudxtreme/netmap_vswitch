@@ -28,8 +28,6 @@
 #include <netmap/netmap_kern.h>
 #include <linux/virtio_ring.h>
 
-#define VIRTIO_PTNETMAP_ON(_na)        0
-
 #define SOFTC_T	virtnet_info
 
 static int virtnet_close(struct ifnet *ifp);
@@ -599,9 +597,6 @@ virtio_netmap_init_buffers(struct SOFTC_T *vi)
 				sizeof(shared_rx_vnet_hdr.hdr);
 	unsigned int r;
 
-	/* if ptnetmap is enabled we must not init netmap buffers */
-	if (VIRTIO_PTNETMAP_ON(na))
-		return 1;
 	if (!nm_native_on(na))
 		return 0;
 	for (r = 0; r < na->num_rx_rings; r++) {

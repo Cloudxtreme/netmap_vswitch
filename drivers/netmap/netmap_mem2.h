@@ -24,8 +24,6 @@
  */
 
 /*
- * $FreeBSD: head/sys/dev/netmap/netmap_mem2.c 234290 2012-04-14 16:44:18Z luigi $
- *
  * (New) memory allocator for netmap
  */
 
@@ -96,8 +94,6 @@
 #ifndef _NET_NETMAP_MEM2_H_
 #define _NET_NETMAP_MEM2_H_
 
-
-
 /* We implement two kinds of netmap_mem_d structures:
  *
  * - global: used by hardware NICS;
@@ -157,13 +153,6 @@ void netmap_mem_get(struct netmap_mem_d *);
 void netmap_mem_put(struct netmap_mem_d *);
 
 #endif /* !NM_DEBUG_PUTGET */
-
-#ifdef WITH_PTNETMAP_GUEST
-struct netmap_mem_d* netmap_mem_pt_guest_new(struct ifnet *,
-		struct netmap_pt_guest_ops *);
-struct ptnetmap_memdev;
-struct netmap_mem_d* netmap_mem_pt_guest_attach(struct ptnetmap_memdev *, uint16_t);
-#endif /* WITH_PTNETMAP_GUEST */
 
 #define NETMAP_MEM_PRIVATE	0x2	/* allocator uses private address space */
 #define NETMAP_MEM_IO		0x4	/* the underlying memory is mmapped I/O */
