@@ -1,0 +1,105 @@
+#!/bin/bash
+
+root_dir=`pwd`
+export root_dir
+
+KSRC=$root_dir/linux-4.1.15
+export KSRC
+
+make_kernel()
+{
+	echo "make kernel"
+	cd $root_dir
+
+	cp -f x86_64_defconfig $KSRC/arch/x86/configs/
+	cd $KSRC
+	make x86_64_defconfig
+	make j=4	
+}
+
+make_drivers()
+{
+	echo "make drivers"
+	cd $root_dir/drivers
+	make j=4
+	cd ..
+}
+
+make_libnetmap()
+{
+	echo "make libnetmap"
+
+	cd $root_dir/userspace/lib
+	make
+}
+
+make_daemon()
+{
+	echo "make daemon"
+
+	cd $root_dir/userspace/daemon
+	if [ ! -d objs ]; then mkdir -p objs; fi
+
+	make
+}
+
+make_clean()
+{
+	cd $root_dir
+	rm -rf rootfs.*
+
+	cd $root_dir/drivers
+	make clean
+
+	cd $root_dir/userspace/lib
+	make clean
+	rm -rf $root_dir/rootfs/lib64/libnetmap.so
+
+	cd $root_dir/userspace/daemon
+	make clean
+	rm -rf $root_dir/rootfs/usr/bin/vsecplat
+
+	rm -rf $root_dir/rootfs/vmlinux
+}
+
+show_usage()
+{
+	echo "usage: build [-k] [-d] [-l] [-u] [-c]"
+	echo "	-k : build the kernel"
+	echo "	-d : build netmap/drivers" 
+	echo "	-l : build netmap userspace library" 
+	echo "	-u : build vswitch daemon" 
+	echo "	-c : make clean"
+}
+
+if [ $# -eq 0 ]; then
+	make_kernel
+	make_drivers
+	make_libnetmap
+	make_daemon
+else
+	while [ $# -gt 0 ]
+	do
+		case $1 in
+			-k)
+				make_kernel
+				;;
+			-d)
+				make_drivers
+				;;
+			-l)
+				make_libnetmap
+				;;
+			-u)
+				make_daemon
+				;;
+			-c)
+				make_clean
+				;;
+			-h)
+				show_usage
+				;;
+		esac
+		shift
+	done
+fi
