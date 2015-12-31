@@ -34,7 +34,6 @@
 #include <bsd_glue.h>
 #include <netmap.h>
 #include <netmap/netmap_kern.h>
-#include <netmap/netmap_virt.h>
 
 #define SOFTC_T	e1000_adapter
 

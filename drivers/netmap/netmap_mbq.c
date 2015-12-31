@@ -23,25 +23,8 @@
  * SUCH DAMAGE.
  */
 
-/*
- * $FreeBSD$
- */
-
-
-#ifdef linux
 #include "bsd_glue.h"
-#elif defined (_WIN32)
-#include "win_glue.h"
-#else   /* __FreeBSD__ */
-#include <sys/param.h>
-#include <sys/lock.h>
-#include <sys/mutex.h>
-#include <sys/systm.h>
-#include <sys/mbuf.h>
-#endif  /* __FreeBSD__ */
-
 #include "netmap_mbq.h"
-
 
 static inline void __mbq_init(struct mbq *q)
 {

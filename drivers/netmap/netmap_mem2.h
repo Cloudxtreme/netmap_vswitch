@@ -119,9 +119,6 @@ extern struct netmap_mem_d nm_mem;
 
 int	   netmap_mem_get_lut(struct netmap_mem_d *, struct netmap_lut *);
 vm_paddr_t netmap_mem_ofstophys(struct netmap_mem_d *, vm_ooffset_t);
-#ifdef _WIN32
-PMDL win32_build_user_vm_map(struct netmap_mem_d* nmd);
-#endif
 int	   netmap_mem_finalize(struct netmap_mem_d *, struct netmap_adapter *);
 int 	   netmap_mem_init(void);
 void 	   netmap_mem_fini(void);

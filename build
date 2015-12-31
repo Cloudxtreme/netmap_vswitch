@@ -29,7 +29,7 @@ make_libnetmap()
 {
 	echo "make libnetmap"
 
-	cd $root_dir/userspace/lib
+	cd $root_dir/lib
 	make
 }
 
@@ -37,7 +37,7 @@ make_daemon()
 {
 	echo "make daemon"
 
-	cd $root_dir/userspace/daemon
+	cd $root_dir/daemon
 	if [ ! -d objs ]; then mkdir -p objs; fi
 
 	make
@@ -45,21 +45,14 @@ make_daemon()
 
 make_clean()
 {
-	cd $root_dir
-	rm -rf rootfs.*
-
 	cd $root_dir/drivers
 	make clean
 
-	cd $root_dir/userspace/lib
+	cd $root_dir/lib
 	make clean
-	rm -rf $root_dir/rootfs/lib64/libnetmap.so
 
-	cd $root_dir/userspace/daemon
-	make clean
-	rm -rf $root_dir/rootfs/usr/bin/vsecplat
-
-	rm -rf $root_dir/rootfs/vmlinux
+    cd $root_dir/daemon
+    make clean
 }
 
 show_usage()

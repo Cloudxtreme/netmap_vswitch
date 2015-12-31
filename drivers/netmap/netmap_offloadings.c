@@ -23,40 +23,14 @@
  * SUCH DAMAGE.
  */
 
-/* $FreeBSD: head/sys/dev/netmap/netmap_offloadings.c 261909 2014-02-15 04:53:04Z luigi $ */
-
-#if defined(__FreeBSD__)
-#include <sys/cdefs.h> /* prerequisite */
-
-#include <sys/types.h>
-#include <sys/errno.h>
-#include <sys/param.h>	/* defines used in kernel.h */
-#include <sys/kernel.h>	/* types used in module initialization */
-#include <sys/sockio.h>
-#include <sys/socketvar.h>	/* struct socket */
-#include <sys/socket.h> /* sockaddrs */
-#include <net/if.h>
-#include <net/if_var.h>
-#include <machine/bus.h>	/* bus_dmamap_* */
-#include <sys/endian.h>
-
-#elif defined(linux)
-
+#if defined(linux)
 #include "bsd_glue.h"
-
-#elif defined(__APPLE__)
-
-#warning OSX support is only partial
-#include "osx_glue.h"
-
 #else
-
 #error	Unsupported platform
-
 #endif /* unsupported */
 
 #include <netmap.h>
-#include <netmap/netmap_kern.h>
+#include "netmap_kern.h"
 
 /* This routine is called by bdg_mismatch_datapath() when it finishes
  * accumulating bytes for a segment, in order to fix some fields in the

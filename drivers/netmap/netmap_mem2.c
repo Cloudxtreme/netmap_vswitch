@@ -27,49 +27,11 @@
 #include "bsd_glue.h"
 #endif /* linux */
 
-#ifdef __APPLE__
-#include "osx_glue.h"
-#endif /* __APPLE__ */
-
-#ifdef __FreeBSD__
-#include <sys/cdefs.h> /* prerequisite */
-__FBSDID("$FreeBSD: head/sys/dev/netmap/netmap.c 241723 2012-10-19 09:41:45Z glebius $");
-
-#include <sys/types.h>
-#include <sys/malloc.h>
-#include <sys/kernel.h>		/* MALLOC_DEFINE */
-#include <sys/proc.h>
-#include <vm/vm.h>	/* vtophys */
-#include <vm/pmap.h>	/* vtophys */
-#include <sys/socket.h> /* sockaddrs */
-#include <sys/selinfo.h>
-#include <sys/sysctl.h>
-#include <net/if.h>
-#include <net/if_var.h>
-#include <net/vnet.h>
-#include <machine/bus.h>	/* bus_dmamap_* */
-
-/* M_NETMAP only used in here */
-MALLOC_DECLARE(M_NETMAP);
-MALLOC_DEFINE(M_NETMAP, "netmap", "Network memory map");
-
-#endif /* __FreeBSD__ */
-
-#ifdef _WIN32
-#include <win_glue.h>
-#endif
-
 #include <netmap.h>
-#include <netmap/netmap_kern.h>
-#include "netmap_virt.h"
+#include "netmap_kern.h"
 #include "netmap_mem2.h"
 
-#ifdef _WIN32_USE_SMALL_GENERIC_DEVICES_MEMORY
-#define NETMAP_BUF_MAX_NUM  8*4096      /* if too big takes too much time to allocate */
-#else
 #define NETMAP_BUF_MAX_NUM 20*4096*2	/* large machine */
-#endif
-
 #define NETMAP_POOL_MAX_NAMSZ	32
 
 
@@ -153,11 +115,7 @@ typedef uint16_t nm_memid_t;
  * Used in ptnetmap.
  */
 struct netmap_mem_shared_info {
-#ifndef _WIN32
         struct netmap_if up;	/* ends with a 0-sized array, which VSC does not like */
-#else /* !_WIN32 */
-	char up[sizeof(struct netmap_if)];
-#endif /* !_WIN32 */
         uint64_t features;
 #define NMS_FEAT_BUF_POOL          0x0001
 #define NMS_FEAT_MEMSIZE           0x0002
@@ -605,13 +563,9 @@ netmap_mem2_ofstophys(struct netmap_mem_d* nmd, vm_ooffset_t offset)
 		if (offset >= p[i].memtotal)
 			continue;
 		// now lookup the cluster's address
-#ifndef _WIN32
 		pa = vtophys(p[i].lut[offset / p[i]._objsize].vaddr) +
 			offset % p[i]._objsize;
-#else
-		pa = vtophys(p[i].lut[offset / p[i]._objsize].vaddr);
-		pa.QuadPart += offset % p[i]._objsize;
-#endif
+
 		NMA_UNLOCK(nmd);
 		return pa;
 	}
@@ -624,89 +578,8 @@ netmap_mem2_ofstophys(struct netmap_mem_d* nmd, vm_ooffset_t offset)
 			+ p[NETMAP_RING_POOL].memtotal
 			+ p[NETMAP_BUF_POOL].memtotal);
 	NMA_UNLOCK(nmd);
-#ifndef _WIN32
 	return 0;	// XXX bad address
-#else
-	vm_paddr_t res;
-	res.QuadPart = 0;
-	return res;
-#endif
 }
-
-#ifdef _WIN32
-
-/*
- * win32_build_virtual_memory_for_userspace
- *
- * This function get all the object making part of the pools and maps
- * a contiguous virtual memory space for the userspace
- * It works this way
- * 1 - allocate a Memory Descriptor List wide as the sum
- *		of the memory needed for the pools
- * 2 - cycle all the objects in every pool and for every object do
- *
- *		2a - cycle all the objects in every pool, get the list
- *				of the physical address descriptors
- *		2b - calculate the offset in the array of pages desciptor in the
- *				main MDL
- *		2c - copy the descriptors of the object in the main MDL
- *
- * 3 - return the resulting MDL that needs to be mapped in userland
- *
- * In this way we will have an MDL that describes all the memory for the
- * objects in a single object
-*/
-
-PMDL
-win32_build_user_vm_map(struct netmap_mem_d* nmd)
-{
-	int i, j;
-	u_int memsize, memflags, ofs = 0;
-	PMDL mainMdl, tempMdl;
-
-	if (netmap_mem_get_info(nmd, &memsize, &memflags, NULL)) {
-		D("memory not finalised yet");
-		return NULL;
-	}
-
-	mainMdl = IoAllocateMdl(NULL, memsize, FALSE, FALSE, NULL);
-	if (mainMdl == NULL) {
-		D("failed to allocate mdl");
-		return NULL;
-	}
-
-	NMA_LOCK(nmd);
-	for (i = 0; i < NETMAP_POOLS_NR; i++) {
-		struct netmap_obj_pool *p = &nmd->pools[i];
-		int clsz = p->_clustsize;
-		int clobjs = p->_clustentries; /* objects per cluster */
-		int mdl_len = sizeof(PFN_NUMBER) * BYTES_TO_PAGES(clsz);
-		PPFN_NUMBER pSrc, pDst;
-
-		/* each pool has a different cluster size so we need to reallocate */
-		tempMdl = IoAllocateMdl(p->lut[0].vaddr, clsz, FALSE, FALSE, NULL);
-		if (tempMdl == NULL) {
-			NMA_UNLOCK(nmd);
-			D("fail to allocate tempMdl");
-			IoFreeMdl(mainMdl);
-			return NULL;
-		}
-		pSrc = MmGetMdlPfnArray(tempMdl);
-		/* create one entry per cluster, the lut[] has one entry per object */
-		for (j = 0; j < p->numclusters; j++, ofs += clsz) {
-			pDst = &MmGetMdlPfnArray(mainMdl)[BYTES_TO_PAGES(ofs)];
-			MmInitializeMdl(tempMdl, p->lut[j*clobjs].vaddr, clsz);
-			MmBuildMdlForNonPagedPool(tempMdl); /* compute physical page addresses */
-			RtlCopyMemory(pDst, pSrc, mdl_len); /* copy the page descriptors */
-			mainMdl->MdlFlags = tempMdl->MdlFlags; /* XXX what is in here ? */
-		}
-		IoFreeMdl(tempMdl);
-	}
-	NMA_UNLOCK(nmd);
-	return mainMdl;
-}
-
-#endif /* _WIN32 */
 
 /*
  * helper function for OS-specific mmap routines (currently only windows).
@@ -1334,20 +1207,9 @@ netmap_mem_unmap(struct netmap_obj_pool *p, struct netmap_adapter *na)
 	if (na->pdev == NULL)
 		return 0;
 
-#if defined(__FreeBSD__)
-	(void)i;
-	(void)lim;
-	D("unsupported on FreeBSD");
-
-#elif defined(_WIN32)
-	(void)i;
-	(void)lim;
-	D("unsupported on Windows");	//XXX_ale, really?
-#else /* linux */
 	for (i = 2; i < lim; i++) {
 		netmap_unload_map(na, (bus_dma_tag_t) na->pdev, &p->lut[i].paddr);
 	}
-#endif /* linux */
 
 	return 0;
 }
@@ -1355,11 +1217,6 @@ netmap_mem_unmap(struct netmap_obj_pool *p, struct netmap_adapter *na)
 static int
 netmap_mem_map(struct netmap_obj_pool *p, struct netmap_adapter *na)
 {
-#if defined(__FreeBSD__)
-	D("unsupported on FreeBSD");
-#elif defined(_WIN32)
-	D("unsupported on Windows");	//XXX_ale, really?
-#else /* linux */
 	int i, lim = p->_objtotal;
 
 	if (na->pdev == NULL)
@@ -1369,7 +1226,6 @@ netmap_mem_map(struct netmap_obj_pool *p, struct netmap_adapter *na)
 		netmap_load_map(na, (bus_dma_tag_t) na->pdev, &p->lut[i].paddr,
 				p->lut[i].vaddr);
 	}
-#endif /* linux */
 
 	return 0;
 }

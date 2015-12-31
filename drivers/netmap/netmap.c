@@ -25,7 +25,6 @@
 
 
 /*
- * $FreeBSD$
  *
  * This module supports memory mapped access to network devices,
  * see netmap(4).
@@ -137,7 +136,6 @@ ports attached to the switch)
  *  	structure for each open().
  *
  *      os-specific:
- *  	    FreeBSD: see netmap_open() (netmap_freebsd.c)
  *  	    linux:   see linux_netmap_open() (netmap_linux.c)
  *
  * > 2. on each descriptor, the process issues an ioctl() to identify
@@ -214,7 +212,6 @@ ports attached to the switch)
  * >    the shared memory region.
  *
  *      os-specific:
- *  	    FreeBSD: netmap_mmap_single (netmap_freebsd.c).
  *  	    linux:   linux_netmap_mmap (netmap_linux.c).
  *
  * > 4. using the functions in the netmap(4) userspace API, a process
@@ -305,7 +302,6 @@ ports attached to the switch)
  *             kring->nm_sync() == netmap_txsync_to_host
  *               netmap_txsync_to_host(na)
  *                 nm_os_send_up()
- *                   FreeBSD: na->if_input() == ether_input()
  *                   linux: netif_rx() with NM_MAGIC_PRIORITY_RX
  *
  *
@@ -321,7 +317,6 @@ ports attached to the switch)
  *                       linux:   dev_queue_xmit() with NM_MAGIC_PRIORITY_TX
  *                           ifp->ndo_start_xmit == generic_ndo_start_xmit()
  *                               gna->save_start_xmit == orig. dev. start_xmit
- *                       FreeBSD: na->if_transmit() == orig. dev if_transmit
  *           2) generic_mbuf_destructor()
  *                   na->nm_notify() == netmap_notify()
  *    - rx from netmap userspace:
@@ -333,7 +328,6 @@ ports attached to the switch)
  *                   mbq_safe_enqueue()
  *                   na->nm_notify() == netmap_notify()
  *    - rx from host stack
- *        FreeBSD: same as native
  *        Linux: same as native except:
  *           1) host stack
  *               dev_queue_xmit() without NM_MAGIC_PRIORITY_TX
@@ -419,66 +413,18 @@ ports attached to the switch)
  * is present in netmap_kern.h
  */
 
-#if defined(__FreeBSD__)
-#include <sys/cdefs.h> /* prerequisite */
-#include <sys/types.h>
-#include <sys/errno.h>
-#include <sys/param.h>	/* defines used in kernel.h */
-#include <sys/kernel.h>	/* types used in module initialization */
-#include <sys/conf.h>	/* cdevsw struct, UID, GID */
-#include <sys/filio.h>	/* FIONBIO */
-#include <sys/sockio.h>
-#include <sys/socketvar.h>	/* struct socket */
-#include <sys/malloc.h>
-#include <sys/poll.h>
-#include <sys/rwlock.h>
-#include <sys/socket.h> /* sockaddrs */
-#include <sys/selinfo.h>
-#include <sys/sysctl.h>
-#include <sys/jail.h>
-#include <net/vnet.h>
-#include <net/if.h>
-#include <net/if_var.h>
-#include <net/bpf.h>		/* BIOCIMMEDIATE */
-#include <machine/bus.h>	/* bus_dmamap_* */
-#include <sys/endian.h>
-#include <sys/refcount.h>
-
-
-/* reduce conditional code */
-// linux API, use for the knlist in FreeBSD
-/* use a private mutex for the knlist */
-#define init_waitqueue_head(x) do {			\
-	struct mtx *m = &(x)->m;			\
-	mtx_init(m, "nm_kn_lock", NULL, MTX_DEF);	\
-	knlist_init_mtx(&(x)->si.si_note, m);		\
-    } while (0)
-
-#elif defined(linux)
-
+#if defined(linux)
 #include "bsd_glue.h"
-
-#elif defined(__APPLE__)
-
-#warning OSX support is only partial
-#include "osx_glue.h"
-
-#elif defined (_WIN32)
-
-#include "win_glue.h"
-
 #else
-
 #error	Unsupported platform
-
 #endif /* unsupported */
 
 /*
  * common headers
  */
 #include <netmap.h>
-#include <netmap/netmap_kern.h>
-#include <netmap/netmap_mem2.h>
+#include "netmap_kern.h"
+#include "netmap_mem2.h"
 
 
 /* user-controlled variables */
@@ -846,19 +792,6 @@ netmap_krings_create(struct netmap_adapter *na, u_int tailroom)
 }
 
 
-#ifdef __FreeBSD__
-static void
-netmap_knlist_destroy(NM_SELINFO_T *si)
-{
-	/* XXX kqueue(9) needed; these will mirror knlist_init. */
-	knlist_delete(&si->si.si_note, curthread, 0 /* not locked */ );
-	knlist_destroy(&si->si.si_note);
-	/* now we don't need the mutex anymore */
-	mtx_destroy(&si->m);
-}
-#endif /* __FreeBSD__ */
-
-
 /* undo the actions performed by netmap_krings_create */
 /* call with NMG_LOCK held */
 void
@@ -916,17 +849,6 @@ netmap_do_unregif(struct netmap_priv_d *priv)
 	na->active_fds--;
 	/* unset nr_pending_mode and possibly release exclusive mode */
 	netmap_krings_put(priv);
-
-#ifdef	WITH_MONITOR
-	/* XXX check whether we have to do something with monitor
-	 * when rings change nr_mode. */
-	if (na->active_fds <= 0) {
-		/* walk through all the rings and tell any monitor
-		 * that the port is going to exit netmap mode
-		 */
-		netmap_monitor_stop(na);
-	}
-#endif
 
 	if (nm_kring_pending(priv)) {
 		na->nm_register(na, 0);
@@ -1335,14 +1257,7 @@ netmap_get_hw_na(struct ifnet *ifp, struct netmap_adapter **na)
 		 */
 		if (NETMAP_OWNED_BY_ANY(prev_na)
 			|| i != NETMAP_ADMODE_GENERIC
-			|| prev_na->na_flags & NAF_FORCE_NATIVE
-#ifdef WITH_PIPES
-			/* ugly, but we cannot allow an adapter switch
-			 * if some pipe is referring to this one
-			 */
-			|| prev_na->na_next_pipe > 0
-#endif
-		) {
+			|| prev_na->na_flags & NAF_FORCE_NATIVE) {
 			*na = prev_na;
 			return 0;
 		}
@@ -2318,40 +2233,8 @@ netmap_ioctl(struct netmap_priv_d *priv, u_long cmd, caddr_t data, struct thread
 		error = netmap_bdg_config(nmr);
 		break;
 #endif
-#ifdef __FreeBSD__
-	case FIONBIO:
-	case FIOASYNC:
-		ND("FIONBIO/FIOASYNC are no-ops");
-		break;
-
-	case BIOCIMMEDIATE:
-	case BIOCGHDRCMPLT:
-	case BIOCSHDRCMPLT:
-	case BIOCSSEESENT:
-		D("ignore BIOCIMMEDIATE/BIOCSHDRCMPLT/BIOCSHDRCMPLT/BIOCSSEESENT");
-		break;
-
-	default:	/* allow device-specific ioctls */
-	    {
-		struct ifnet *ifp = ifunit_ref(nmr->nr_name);
-		if (ifp == NULL) {
-			error = ENXIO;
-		} else {
-			struct socket so;
-
-			bzero(&so, sizeof(so));
-			so.so_vnet = ifp->if_vnet;
-			// so->so_proto not null.
-			error = ifioctl(&so, cmd, data, td);
-			if_rele(ifp);
-		}
-		break;
-	    }
-
-#else /* linux */
 	default:
 		error = EOPNOTSUPP;
-#endif /* linux */
 	}
 
 	return (error);
@@ -2642,11 +2525,6 @@ netmap_attach_common(struct netmap_adapter *na)
 		return EINVAL;
 	}
 
-#ifdef __FreeBSD__
-	if (na->na_flags & NAF_HOST_RINGS && na->ifp) {
-		na->if_input = na->ifp->if_input; /* for netmap_send_up */
-	}
-#endif /* __FreeBSD__ */
 	if (na->nm_krings_create == NULL) {
 		/* we assume that we have been called by a driver,
 		 * since other port types all provide their own
@@ -3231,10 +3109,6 @@ netmap_init(void)
 	error = netmap_init_bridges();
 	if (error)
 		goto fail;
-
-#ifdef __FreeBSD__
-	nm_os_vi_init_index();
-#endif
 
 	error = nm_os_ifnet_init();
 	if (error)

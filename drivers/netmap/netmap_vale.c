@@ -55,59 +55,10 @@ ports attached to the switch)
  * is present in netmap_kern.h
  */
 
-#if defined(__FreeBSD__)
-#include <sys/cdefs.h> /* prerequisite */
-__FBSDID("$FreeBSD: head/sys/dev/netmap/netmap.c 257176 2013-10-26 17:58:36Z glebius $");
-
-#include <sys/types.h>
-#include <sys/errno.h>
-#include <sys/param.h>	/* defines used in kernel.h */
-#include <sys/kernel.h>	/* types used in module initialization */
-#include <sys/conf.h>	/* cdevsw struct, UID, GID */
-#include <sys/sockio.h>
-#include <sys/socketvar.h>	/* struct socket */
-#include <sys/malloc.h>
-#include <sys/poll.h>
-#include <sys/rwlock.h>
-#include <sys/socket.h> /* sockaddrs */
-#include <sys/selinfo.h>
-#include <sys/sysctl.h>
-#include <net/if.h>
-#include <net/if_var.h>
-#include <net/bpf.h>		/* BIOCIMMEDIATE */
-#include <machine/bus.h>	/* bus_dmamap_* */
-#include <sys/endian.h>
-#include <sys/refcount.h>
-
-
-#define BDG_RWLOCK_T		struct rwlock // struct rwlock
-
-#define	BDG_RWINIT(b)		\
-	rw_init_flags(&(b)->bdg_lock, "bdg lock", RW_NOWITNESS)
-#define BDG_WLOCK(b)		rw_wlock(&(b)->bdg_lock)
-#define BDG_WUNLOCK(b)		rw_wunlock(&(b)->bdg_lock)
-#define BDG_RLOCK(b)		rw_rlock(&(b)->bdg_lock)
-#define BDG_RTRYLOCK(b)		rw_try_rlock(&(b)->bdg_lock)
-#define BDG_RUNLOCK(b)		rw_runlock(&(b)->bdg_lock)
-#define BDG_RWDESTROY(b)	rw_destroy(&(b)->bdg_lock)
-
-
-#elif defined(linux)
-
+#if defined(linux)
 #include "bsd_glue.h"
-
-#elif defined(__APPLE__)
-
-#warning OSX support is only partial
-#include "osx_glue.h"
-
-#elif defined(_WIN32)
-#include "win_glue.h"
-
 #else
-
 #error	Unsupported platform
-
 #endif /* unsupported */
 
 /*
@@ -115,8 +66,8 @@ __FBSDID("$FreeBSD: head/sys/dev/netmap/netmap.c 257176 2013-10-26 17:58:36Z gle
  */
 
 #include <netmap.h>
-#include <netmap/netmap_kern.h>
-#include <netmap/netmap_mem2.h>
+#include "netmap_kern.h"
+#include "netmap_mem2.h"
 
 #ifdef WITH_VALE
 
