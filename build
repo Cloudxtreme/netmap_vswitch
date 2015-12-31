@@ -3,7 +3,8 @@
 root_dir=`pwd`
 export root_dir
 
-KSRC=$root_dir/linux-4.1.15
+# KSRC=$root_dir/linux-4.1.15
+KSRC=/usr/src/kernels/4.1.15
 export KSRC
 
 make_kernel()
@@ -57,7 +58,7 @@ make_clean()
 
 show_usage()
 {
-	echo "usage: build [-k] [-d] [-l] [-u] [-c]"
+	echo "usage: build [-d] [-l] [-u] [-c]"
 	echo "	-k : build the kernel"
 	echo "	-d : build netmap/drivers" 
 	echo "	-l : build netmap userspace library" 
@@ -66,7 +67,7 @@ show_usage()
 }
 
 if [ $# -eq 0 ]; then
-	make_kernel
+#	make_kernel
 	make_drivers
 	make_libnetmap
 	make_daemon
@@ -74,9 +75,6 @@ else
 	while [ $# -gt 0 ]
 	do
 		case $1 in
-			-k)
-				make_kernel
-				;;
 			-d)
 				make_drivers
 				;;
